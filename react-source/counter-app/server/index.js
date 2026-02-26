@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const mongoose = require('mongoose');
+require('dotenv').config();
 
 const app = express();
 app.use(cors());
@@ -9,16 +10,15 @@ app.use(express.json());
 
 // --- 1. POSTGRES CONNECTION ---
 const pool = new Pool({
-  user: 'counter_user',
-  host: 'localhost',
-  database: 'counter_db',
-  password: '***REMOVED***',
-  port: 5432,
+  user: process.env.PG_USER,
+  host: process.env.PG_HOST,
+  database: process.env.PG_DATABASE,
+  password: process.env.PG_PASSWORD,
+  port: process.env.PG_PORT,
 });
 
 // --- 2. MONGO ATLAS CONNECTION ---
-// REPLACE 'YOUR_REAL_PASSWORD' BELOW!
-const MONGO_URL = '***REMOVED***';
+const MONGO_URL = process.env.MONGO_URL;
 
 mongoose.connect(MONGO_URL)
   .then(() => console.log('Connected to MongoDB Atlas'))
