@@ -14,6 +14,10 @@ app.use(cors());
 app.use(express.json());
 
 // --- 1. POSTGRES CONNECTION ---
+// Falls back to an in-memory counter if Postgres is unavailable.
+let pgAvailable = true;
+let memoryCounter = 0;
+
 const pool = new Pool({
   user: process.env.PG_USER,
   host: process.env.PG_HOST,
@@ -21,6 +25,13 @@ const pool = new Pool({
   password: process.env.PG_PASSWORD,
   port: process.env.PG_PORT,
 });
+
+pool.query('SELECT 1')
+  .then(() => console.log('Connected to PostgreSQL'))
+  .catch(() => {
+    pgAvailable = false;
+    console.warn('PostgreSQL unavailable — using in-memory counter');
+  });
 
 // --- 2. MONGO ATLAS CONNECTION ---
 const MONGO_URL = process.env.MONGO_URL;
@@ -40,8 +51,13 @@ const Log = mongoose.model('Log', LogSchema);
 
 app.get('/count', async (req, res) => {
   try {
-    const pgResult = await pool.query('SELECT value FROM counts WHERE id = 1');
-    const countValue = pgResult.rows[0].value;
+    let countValue;
+    if (pgAvailable) {
+      const pgResult = await pool.query('SELECT value FROM counts WHERE id = 1');
+      countValue = pgResult.rows[0].value;
+    } else {
+      countValue = memoryCounter;
+    }
     const recentLogs = await Log.find().sort({ timestamp: -1 }).limit(5);
     res.json({ value: countValue, logs: recentLogs });
   } catch (err) {
@@ -52,10 +68,16 @@ app.get('/count', async (req, res) => {
 
 app.post('/increment', async (req, res) => {
   try {
-    const pgResult = await pool.query('UPDATE counts SET value = value + 1 WHERE id = 1 RETURNING value');
+    let newValue;
+    if (pgAvailable) {
+      const pgResult = await pool.query('UPDATE counts SET value = value + 1 WHERE id = 1 RETURNING value');
+      newValue = pgResult.rows[0].value;
+    } else {
+      newValue = ++memoryCounter;
+    }
     const newLog = new Log({ action: 'Incremented Counter via Atlas' });
     await newLog.save();
-    res.json({ value: pgResult.rows[0].value });
+    res.json({ value: newValue });
   } catch (err) {
     console.error(err);
     res.status(500).send('Database Error');
